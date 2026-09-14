@@ -25,17 +25,40 @@ trait Reducer {
     fn reduce(key: String, values: Vec<String>) -> KeyValue;
 }
 
-fn contains_flag(args: &Args, flag: &'static str) -> bool {
-    let result: Vec<String> = args.filter(|arg| arg.trim().eq(flag)).collect();
+fn contains_flag(args: &Vec<String>, flag: &'static str) -> bool {
+    let clone = args.clone();
+    let result: Vec<String> = clone
+        .into_iter()
+        .filter(|arg| arg.trim().eq(flag))
+        .collect();
 
     result.len() > 0
 }
 
 impl MapReduce {
-    fn run(args: Args) {
-        if contains_flag(&args, "--role=master") {}
+    fn run(&self, args: Args) {
+        let collection: Vec<String> = args.collect();
+        if contains_flag(&collection, "--role=master") {
+            self.start_master();
+            self.calculate_splits();
+            self.assign_tasks();
+            self.wait_job();
+            return;
+        }
 
-        if contains_flag(&args, "--role=worker") {}
+        if contains_flag(&collection, "--role=worker") {
+            self.start_worker(self.mapper, self.reducer);
+            self.wait_task();
+            return;
+        }
+
+        self.upload_binary(args[0]);
+        self.request_node(format!("{} --role=master", args[0]));
+        self.request_nodes(
+            self.map_workers + self.partitions,
+            format!("{} --role=worker", args[0]),
+        );
+        self.wait_job();
     }
 
     fn build() -> MapReduce {
