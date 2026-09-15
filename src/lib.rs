@@ -1,5 +1,7 @@
 use std::env::Args;
 
+use kube::Client;
+
 struct Master {}
 
 struct Worker {}
@@ -10,6 +12,7 @@ struct MapReduce {
     // Number of patitions (intermediate key)
     partitions: u16,
     map_workers: u16,
+    client: Client,
 }
 
 struct KeyValue {
@@ -36,7 +39,12 @@ fn contains_flag(args: &Vec<String>, flag: &'static str) -> bool {
 }
 
 impl MapReduce {
-    fn run(&self, args: Args) {
+    fn run(
+        &self,
+        args: Args,
+        mapper: impl Fn(KeyValue) -> Vec<KeyValue>,
+        reducer: impl Fn(String, Vec<String>) -> KeyValue,
+    ) {
         let collection: Vec<String> = args.collect();
         if contains_flag(&collection, "--role=master") {
             self.start_master();
@@ -47,25 +55,27 @@ impl MapReduce {
         }
 
         if contains_flag(&collection, "--role=worker") {
-            self.start_worker(self.mapper, self.reducer);
+            self.start_worker(mapper, reducer);
             self.wait_task();
             return;
         }
 
-        self.upload_binary(args[0]);
-        self.request_node(format!("{} --role=master", args[0]));
+        let bin_name = collection.get(0).unwrap();
+        self.upload_binary(bin_name);
+        self.request_node(format!("{} --role=master", bin_name));
         self.request_nodes(
             self.map_workers + self.partitions,
-            format!("{} --role=worker", args[0]),
+            format!("{} --role=worker", bin_name),
         );
         self.wait_job();
     }
 
-    fn build() -> MapReduce {
+    async fn build() -> MapReduce {
         let mr = MapReduce {
             block_size: 64,
             map_workers: 0,
             partitions: 8,
+            client: Client::try_default().await.unwrap(),
         };
 
         mr
@@ -86,9 +96,25 @@ impl MapReduce {
         self
     }
 
-    fn mapper(map: impl Fn(KeyValue) -> Vec<KeyValue>) {}
+    fn upload_binary(&self, name: &String) {}
 
-    fn reducer(reduce: impl Fn(String, Vec<String>) -> KeyValue) {}
+    fn start_master(&self) {}
 
-    fn upload() {}
+    fn start_worker(
+        &self,
+        mapper: impl Fn(KeyValue) -> Vec<KeyValue>,
+        reducer: impl Fn(String, Vec<String>) -> KeyValue,
+    ) {
+    }
+
+    fn request_node(&self, cmd: String) {}
+
+    fn request_nodes(&self, amount: u16, cmd: String) {}
+
+    fn wait_job(&self) {}
+    fn wait_task(&self) {}
+
+    fn calculate_splits(&self) {}
+
+    fn assign_tasks(&self) {}
 }
